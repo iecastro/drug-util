@@ -13,7 +13,7 @@ data %>% filter(`Suppression Used`) # ~2.5M obs suppressed
 
 # clean col names
 data <- data %>% 
-  clean_names()
+  janitor::clean_names()
 
 #----- summaries
 data %>% 
@@ -172,4 +172,16 @@ humira %>%
   coord_flip() +
   labs(x = "Medicaid cost-per-unit of Humira Pen")
 
-  
+
+#--- top mfr by state
+state_mfr <- data %>% 
+  filter(!is.na(medicaid_amount_reimbursed)) %>% 
+  group_by(state, labeler_code, labeler_name) %>% 
+  summarise(total = sum(medicaid_amount_reimbursed)) %>% 
+  ungroup() %>% 
+  group_by(state) %>% 
+  slice(which.max(total)) %>% 
+  ungroup()
+
+
+
