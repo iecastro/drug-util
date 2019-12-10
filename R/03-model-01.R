@@ -1,6 +1,5 @@
 library(tidyverse)
 library(parsnip)
-library(breakDown)
 
 data("DrugUtil")
 
@@ -54,9 +53,10 @@ expense_test  <- rsample::testing(data_split)
 
 rf_mod <- rand_forest(mode = "regression",
             mtry = 5,
-            trees = 200) %>% 
+            trees = 150) %>% 
   set_engine("ranger",
-             seed = 5462) %>% 
+             seed = 5462,
+             importance = 'impurity') %>% 
   fit(medicaid_amount_reimbursed ~ .,
       data = expense_train)
 

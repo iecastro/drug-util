@@ -1,0 +1,320 @@
+---
+title: "Medicaid drug reimbursements during 2018"
+output: 
+  flexdashboard::flex_dashboard:
+    theme: spacelab
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+
+library(flexdashboard)
+library(tidyverse)
+library(factoextra)
+
+load("../data/DrugUtil.RData")
+
+
+#--- explore labelers
+state_mfr <- DrugUtil %>% 
+  filter(!is.na(medicaid_amount_reimbursed)) %>% 
+  group_by(state, labeler_code, labeler_name) %>% 
+  summarise(total = sum(medicaid_amount_reimbursed)) %>% 
+  ungroup() %>% 
+  group_by(state) %>% 
+  slice(which.max(total)) %>% 
+  ungroup()
+
+
+label <- state_mfr %>% 
+  filter(state != "XX") %>% 
+  group_by(labeler_name) %>% 
+  slice(which.max(total)) %>% 
+  ungroup()
+
+
+
+#--- explore clustering
+util_counts <- DrugUtil %>% 
+  filter(state != "XX" &
+           !is.na(total_amount_reimbursed)) %>% 
+  mutate(utilization_type = as.factor(utilization_type)) %>% 
+  group_by(state, utilization_type) %>% 
+  count() %>% 
+  spread(key = utilization_type,
+         value = n,
+         fill = 0) %>% 
+  ungroup()
+
+
+total_sums <- DrugUtil %>% 
+  filter(state != "XX" &
+           !is.na(total_amount_reimbursed)) %>% 
+  group_by(state) %>% 
+  summarise(medicaid_amount_reimbursed = 
+              sum(medicaid_amount_reimbursed),
+            number_of_prescriptions = 
+              sum(number_of_prescriptions),
+            units_reimbursed = 
+              sum(units_reimbursed),
+            total_amount_reimbursed = 
+              sum(total_amount_reimbursed)) %>% 
+  ungroup()
+
+
+merged <- total_sums %>% 
+  inner_join(util_counts,
+             by = "state") %>% 
+  column_to_rownames(var = "state") 
+
+
+# scale dataframe
+clust_df <- scale(merged)
+
+# distance matrix using
+# correlation-based distance
+distance <- get_dist(clust_df,
+                     method =  "pearson") 
+
+#---- cluster analysis 
+
+set.seed(3456)
+
+kclust <- kmeans(clust_df, 
+                 centers = 4, 
+                 nstart = 25)
+
+kclust2 <- kmeans(clust_df, 
+                 centers = 2, 
+                 nstart = 25)
+
+#-----
+
+#load("../data/rf_mod.RData")
+
+```
+
+# Top Vendors
+
+Column {data-width=550}
+-----------------------------------------------------------------------
+
+### Top vendors by State
+
+```{r}
+state_mfr %>% 
+  arrange(desc(total)) %>% 
+  filter(state != "XX") %>% # remove national total 
+  ggplot(aes(fct_inorder(state), total)) + 
+  geom_col(aes(fill = labeler_name),
+           width = .75) +
+  coord_flip() + # flip axis position
+  scico::scale_fill_scico_d() +
+  theme_minimal() +
+  ggrepel::geom_text_repel(aes(state, total,
+                               label = labeler_name),
+                           data = label,
+                           hjust = -.75,
+                           nudge_x = 1.2,
+                           nudge_y = .25,
+                           direction = "y") +
+  # scaling y axis because they're flipped
+  scale_y_continuous(labels = scales::dollar) +
+  #scale_x_discrete() +
+  theme(legend.position = "none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major.y = element_blank(),
+        axis.text = element_text(color = "black"),
+        axis.text.y = element_text(size = 6)) +
+  labs(x = "", y ="")
+ 
+
+
+```
+
+Column {data-width=450}
+-----------------------------------------------------------------------
+
+### Gilead Sciences is the top vendor in 16 States
+
+```{r}
+state_mfr %>% 
+  arrange(desc(total)) %>% 
+  filter(state != "XX") %>% # remove national total 
+  mutate(gilead = 
+           ifelse(labeler_name == "Gilead Sciences, Inc.",
+                  "yes", "no")) %>% 
+  ggplot(aes(fct_inorder(state), total)) + 
+  geom_point(aes(color = gilead), size= 1.5) +
+  geom_segment(aes(x = state, xend = state,
+                   y = 0, yend = total,
+                   color = gilead)) +
+  coord_flip() + # flip axis position
+  scale_color_manual(values = 
+                      c("yes" = "#225B60",
+                        "no" = "Grey90")) +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::dollar) +
+  theme(legend.position = "none",
+        panel.grid.major.y = element_blank(),
+        axis.text = element_text(color = "black"),
+        axis.text.y = element_text(size = 6)) +
+  labs(x = "", y ="")
+
+```
+
+### Top 10 drugs (in dollar amount) reimbursed by Medicaid across all States
+
+```{r}
+DrugUtil %>% 
+  filter(!is.na(units_reimbursed)) %>% 
+  group_by(product_name) %>% 
+  summarise(medicaid_paid = 
+              sum(medicaid_amount_reimbursed),
+            non_medicaid = sum(non_medicaid_amount_reimbursed),
+            tot_paid = 
+              sum(total_amount_reimbursed)) %>% 
+  arrange(desc(medicaid_paid)) %>% 
+  slice(1:10) %>% 
+  mutate_if(is.numeric, scales::dollar) %>% 
+    knitr::kable(col.names = 
+                 c("Label",
+                   "Medicaid Paid",
+                   "Non-Medicaid Paid",
+                    "Total Reimbursements"))
+
+```
+
+# Clustering check
+
+Column {.tabset}
+-------------------------------------
+
+### Correlation-based clustering 
+
+```{r}
+fviz_dist(distance, 
+          gradient = list(low = "#B8AE87", 
+                          mid = "white", 
+                          high = "#4C0000")) +
+  theme(axis.text = element_text(color = "black", 
+                                 size = 6))
+
+```
+
+
+### Cluster tendency
+
+```{r}
+# cluster tendency
+p <- get_clust_tendency(merged, n = 25)
+
+p$plot + 
+  annotate("text", x = 9, y = 5, 
+           label = "Hopkins stat = 0.95")
+
+```
+
+
+### Determine k: WSS method
+```{r}
+fviz_nbclust(clust_df, 
+             kmeans, 
+             method = "wss") # within-clust sum of squares
+```
+
+### Determine k: Silhouette method
+```{r}
+
+fviz_nbclust(clust_df, kmeans, 
+             method = "silhouette")
+```
+
+
+# Cluster analysis
+
+Column {data-width=350}{.tabset}
+-------------------------------------
+
+### Clusters by State (k = 4)
+
+```{r}
+fviz_cluster(kclust, data = merged,
+             main = "Clusters",
+             repel = TRUE) +
+  theme_minimal() +
+  scico::scale_color_scico_d(palette = "roma") +
+  scico::scale_fill_scico_d(palette = "roma")
+
+```
+
+
+### k-means table
+```{r}
+merged %>% 
+  mutate(cluster = kclust$cluster) %>%
+  group_by(cluster) %>%
+  summarise_all("mean") %>% 
+  mutate_at(vars(medicaid_amount_reimbursed,
+                 total_amount_reimbursed),
+            scales::dollar) %>% 
+  mutate_at(vars(number_of_prescriptions,
+                 units_reimbursed,
+                 FFSU,
+                 MCOU),
+            scales::comma) %>% 
+  knitr::kable(col.names = 
+                 c("Cluster",
+                   "Medicaid Paid",
+                   "Prescriptions",
+                   "Units reimbursed",
+                   "Total reimbursed",
+                   "Fee-for-Service",
+                   "Managed Care"))
+
+```
+
+
+Column {data-width=350}{.tabset}
+-------------------------------------
+
+### Clusters by State (k = 2)
+
+```{r}
+fviz_cluster(kclust2, data = merged,
+             main = "Clusters",
+             repel = TRUE) +
+  theme_minimal() +
+  scico::scale_color_scico_d(palette = "roma") +
+  scico::scale_fill_scico_d(palette = "roma")
+
+```
+
+
+### k-means table
+```{r}
+merged %>% 
+  mutate(cluster = kclust2$cluster) %>%
+  group_by(cluster) %>%
+  summarise_all("mean") %>% 
+  mutate_at(vars(medicaid_amount_reimbursed,
+                 total_amount_reimbursed),
+            scales::dollar) %>% 
+  mutate_at(vars(number_of_prescriptions,
+                 units_reimbursed,
+                 FFSU,
+                 MCOU),
+            scales::comma) %>% 
+  knitr::kable(col.names = 
+                 c("Cluster",
+                   "Medicaid Paid",
+                   "Prescriptions",
+                   "Units reimbursed",
+                   "Total reimbursed",
+                   "Fee-for-Service",
+                   "Managed Care"))
+
+```
+
+
