@@ -3,6 +3,7 @@ title: "Medicaid drug reimbursements during 2018"
 output: 
   flexdashboard::flex_dashboard:
     theme: spacelab
+    social: menu
     orientation: columns
     vertical_layout: fill
 ---
@@ -33,7 +34,8 @@ label <- state_mfr %>%
   slice(which.max(total)) %>% 
   ungroup()
 
-
+top_vendors <- label %>% 
+  pull(labeler_name)
 
 #--- explore clustering
 util_counts <- DrugUtil %>% 
@@ -95,12 +97,12 @@ kclust2 <- kmeans(clust_df,
 
 ```
 
-# Top Vendors
+# Reimbursements
 
-Column {data-width=550}
+Column {data-width=650}{.tabset}
 -----------------------------------------------------------------------
 
-### Top vendors by State
+### Top vendors
 
 ```{r}
 state_mfr %>% 
@@ -133,12 +135,10 @@ state_mfr %>%
 
 ```
 
-Column {data-width=450}
------------------------------------------------------------------------
-
-### Gilead Sciences is the top vendor in 16 States
+### Gilead 
 
 ```{r}
+
 state_mfr %>% 
   arrange(desc(total)) %>% 
   filter(state != "XX") %>% # remove national total 
@@ -160,11 +160,68 @@ state_mfr %>%
         panel.grid.major.y = element_blank(),
         axis.text = element_text(color = "black"),
         axis.text.y = element_text(size = 6)) +
-  labs(x = "", y ="")
+  labs(x = "", y ="") +
+  ggtitle(" ",
+          subtitle = "Gilead Sciences is the top vendor in 16 States")
 
 ```
 
-### Top 10 drugs (in dollar amount) reimbursed by Medicaid across all States
+### Top product reimbursed by State
+
+```{r}
+DrugUtil %>% 
+  filter(state != "XX" &
+           !is.na(medicaid_amount_reimbursed)) %>% 
+  group_by(state, product_name) %>% 
+  mutate(medicaid_amount_reimbursed = sum(
+    medicaid_amount_reimbursed
+  )) %>% 
+  ungroup() %>% 
+  group_by(state) %>% 
+  slice(which.max(medicaid_amount_reimbursed)) %>% 
+  ungroup() %>% 
+  select(state, product_name, 
+         labeler_name, 
+         medicaid_amount_reimbursed) %>% 
+    mutate_if(is.numeric, scales::dollar) %>% 
+    knitr::kable(col.names = 
+                 c("State",
+                   "Label",
+                   "Vendor",
+                    "Medicaid Paid"))
+
+
+```
+
+### Reimbursement breakdown by type of care
+
+```{r}
+DrugUtil %>% 
+  filter(state != "XX" &
+           !is.na(medicaid_amount_reimbursed)) %>% 
+  group_by(state, utilization_type) %>% 
+  summarise(total = sum(medicaid_amount_reimbursed)) %>% 
+  ggplot(aes(state, total)) +
+  geom_col(aes(fill = utilization_type),
+           position = "fill",
+           alpha = .7) + 
+  theme_minimal() +
+  coord_flip() +
+  theme(axis.text = element_text(color = "black"),
+        axis.text.y = element_text(size = 6),
+        legend.position = "top") +
+  scico::scale_fill_scico_d() +
+  scale_y_continuous(labels = scales::percent) +
+  labs(x = "", y = "", fill = "")
+  
+
+```
+
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Top 15 drugs (in dollar amount) reimbursed by Medicaid across all States
 
 ```{r}
 DrugUtil %>% 
@@ -176,7 +233,7 @@ DrugUtil %>%
             tot_paid = 
               sum(total_amount_reimbursed)) %>% 
   arrange(desc(medicaid_paid)) %>% 
-  slice(1:10) %>% 
+  slice(1:15) %>% 
   mutate_if(is.numeric, scales::dollar) %>% 
     knitr::kable(col.names = 
                  c("Label",
@@ -185,6 +242,7 @@ DrugUtil %>%
                     "Total Reimbursements"))
 
 ```
+
 
 # Clustering check
 
