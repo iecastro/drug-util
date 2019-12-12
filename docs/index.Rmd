@@ -375,4 +375,49 @@ merged %>%
 
 ```
 
+# Model {.storyboard}
+
+###  Random Forest model
+```{r}
+
+source("../R/03-model-01-sample.R")
+
+rf_mod
+
+```
+
+
+### Important variables based on node impurity reduction
+
+```{r}
+rf_mod$fit$variable.importance %>% 
+  tidy() %>%
+  arrange(desc(x)) %>%
+  ggplot(aes(reorder(names, x), x)) +
+  geom_col() +
+  coord_flip() +
+  ggtitle("Variable Importance") +
+  theme_minimal() +
+  labs(x = "", y = "")
+
+```
+
+
+### Model predictions
+
+```{r}
+
+ggplot(results,
+       aes(.pred, 
+           medicaid_amount_reimbursed)) +
+  geom_point() +
+  scale_y_log10() +
+  scale_x_log10() +
+  geom_smooth(se = FALSE) +
+  theme_minimal() +
+  xlab("predicted values (log10)") +
+  ylab("observed values (log10)")
+
+
+```
 

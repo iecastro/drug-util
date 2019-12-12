@@ -183,5 +183,20 @@ state_mfr <- data %>%
   slice(which.max(total)) %>% 
   ungroup()
 
+#--- add drug classification 
+
+drug_class <- read_csv("data-raw/drug-classification.csv")
+
+drug_class %>% 
+  select(ndc = NDC_11,
+         drug_group = ATC1_name) %>% 
+  right_join(DrugUtil %>% 
+               group_by(quarter),
+             by = "ndc")  # only 38% of ndcs matched
+# may be a bug in the string convertion
+# from 10 to 11 digits ndc
+
+
+
 
 
