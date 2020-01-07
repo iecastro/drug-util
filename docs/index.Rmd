@@ -201,7 +201,7 @@ DrugUtil %>%
            !is.na(medicaid_amount_reimbursed)) %>% 
   group_by(state, utilization_type) %>% 
   summarise(total = sum(medicaid_amount_reimbursed)) %>% 
-  ggplot(aes(state, total)) +
+  ggplot(aes(reorder(state, utilization_type == "MCOU"), total)) +
   geom_col(aes(fill = utilization_type),
            position = "fill",
            alpha = .7) + 
@@ -209,11 +209,12 @@ DrugUtil %>%
   coord_flip() +
   theme(axis.text = element_text(color = "black"),
         axis.text.y = element_text(size = 6),
-        legend.position = "top") +
-  scico::scale_fill_scico_d() +
+        legend.position = "top",
+        panel.grid.major.x = element_line(color = "black"),
+        panel.grid.minor.x = element_line(color = "black")) +
+  scico::scale_fill_scico_d(palette = "tokyo") +
   scale_y_continuous(labels = scales::percent) +
   labs(x = "", y = "", fill = "")
-  
 
 ```
 
@@ -307,8 +308,22 @@ fviz_cluster(kclust, data = merged,
 
 ```
 
+### Clusters by State (k = 2)
 
-### k-means table
+```{r}
+fviz_cluster(kclust2, data = merged,
+             main = "Clusters",
+             repel = TRUE) +
+  theme_minimal() +
+  scico::scale_color_scico_d(palette = "roma") +
+  scico::scale_fill_scico_d(palette = "roma")
+
+```
+
+Column {data-width=350}{.tabset}
+-------------------------------------
+
+### k-means table (k = 4)
 ```{r}
 merged %>% 
   mutate(cluster = kclust$cluster) %>%
@@ -334,23 +349,7 @@ merged %>%
 ```
 
 
-Column {data-width=350}{.tabset}
--------------------------------------
-
-### Clusters by State (k = 2)
-
-```{r}
-fviz_cluster(kclust2, data = merged,
-             main = "Clusters",
-             repel = TRUE) +
-  theme_minimal() +
-  scico::scale_color_scico_d(palette = "roma") +
-  scico::scale_fill_scico_d(palette = "roma")
-
-```
-
-
-### k-means table
+### k-means table (k = 2)
 ```{r}
 merged %>% 
   mutate(cluster = kclust2$cluster) %>%
